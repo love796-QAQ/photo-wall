@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+
+# Runtime/generated content
+uploads/
+location_cache.json
+
+# Local photo library; remove this line if you want Git to track photos.
+photos/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo Wall 管理</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="admin-header">
+    <a href="/" class="admin-brand">PW<span>.</span></a>
+    <div class="header-title">
+      <p>PHOTO WALL CONTROL ROOM</p>
+      <h1>照片与分组</h1>
+    </div>
+    <a href="/" class="view-link">查看照片墙 ↗</a>
+  </header>
+
+  <main class="workspace">
+    <aside class="groups-pane">
+      <div class="pane-toolbar">
+        <div>
+          <span class="section-no">01</span>
+          <h2>分组</h2>
+        </div>
+        <button class="icon-button" id="refresh-groups" type="button" title="刷新">↻</button>
+      </div>
+      <div class="group-actions">
+        <button class="action-button primary" id="new-group-button" type="button"><span>＋</span> 新增分组</button>
+        <button class="action-button" id="import-zip-button" type="button"><span>ZIP</span> 导入压缩包</button>
+      </div>
+      <div id="groups-list" class="groups-list"></div>
+    </aside>
+
+    <section class="content-pane">
+      <div class="content-toolbar">
+        <div class="content-title">
+          <span class="section-no">02</span>
+          <p>当前分组</p>
+          <div class="title-row">
+            <h2 id="detail-name">请选择分组</h2>
+            <div class="group-manage-actions">
+              <button id="rename-group-button" type="button" disabled>重命名</button>
+              <button id="delete-group-button" class="danger" type="button" disabled>删除分组</button>
+            </div>
+          </div>
+        </div>
+        <div class="content-meta">
+          <span id="detail-count">0 PHOTOS</span>
+          <button id="select-display-button" type="button">设为首页展示</button>
+        </div>
+      </div>
+      <div id="group-detail" class="photo-scroll">
+        <div class="empty-state">从左侧选择一个分组</div>
+      </div>
+    </section>
+  </main>
+
+  <input id="append-files" type="file" accept="image/*" multiple hidden>
+
+  <dialog class="modal" id="new-group-modal">
+    <form id="new-group-form" method="dialog">
+      <div class="modal-head"><h3>新增分组</h3><button type="button" data-close>×</button></div>
+      <p>创建后即可在分组内容末尾通过“＋”上传照片。</p>
+      <label class="field"><span>分组名称</span><input id="new-group-name" maxlength="80" placeholder="例如：广州周末" required></label>
+      <div class="modal-actions"><button type="button" data-close>取消</button><button class="primary-button" type="submit">创建分组</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="rename-group-modal">
+    <form id="rename-group-form" method="dialog">
+      <div class="modal-head"><h3>重命名分组</h3><button type="button" data-close>×</button></div>
+      <label class="field"><span>分组名称</span><input id="rename-group-name" maxlength="80" required></label>
+      <div class="modal-actions"><button type="button" data-close>取消</button><button class="primary-button" type="submit">保存名称</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="zip-modal">
+    <form id="zip-form">
+      <div class="modal-head"><h3>导入 ZIP 压缩包</h3><button type="button" data-close>×</button></div>
+      <p>压缩包会自动创建新分组，解压图片并分析 EXIF 信息。</p>
+      <label class="field"><span>新分组名称</span><input id="zip-group-name" maxlength="80" required></label>
+      <label class="drop-zone"><input id="zip-file" type="file" accept=".zip,application/zip" required><strong>选择 ZIP 文件</strong><small>支持压缩包内的 JPG、PNG、WebP 等图片</small></label>
+      <label class="check-row"><input id="zip-resolve" type="checkbox"><span>为陌生 GPS 坐标联网查询中文地点</span></label>
+      <div class="modal-actions"><button type="button" data-close>取消</button><button class="primary-button" type="submit">导入并分析</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="upload-modal">
+    <form id="upload-form">
+      <div class="modal-head"><h3>添加照片</h3><button type="button" data-close>×</button></div>
+      <p>照片将添加到 <strong id="upload-group-name"></strong> 的末尾，不会覆盖已有文件。</p>
+      <div id="upload-file-summary" class="file-summary"></div>
+      <label class="check-row"><input id="upload-resolve" type="checkbox"><span>为陌生 GPS 坐标联网查询中文地点</span></label>
+      <div class="modal-actions"><button type="button" data-close>取消</button><button class="primary-button" type="submit">上传并分析</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast"></div>
+  <script src="admin.js"></script>
+</body>
+</html>

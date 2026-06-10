@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090811">
+  <title>PHOTO WALL — 记忆的维度</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="loader" id="loader" aria-live="polite">
+    <span class="loader-mark">PW</span>
+    <div class="loader-progress"><span id="loader-bar"></span></div>
+    <span class="loader-value" id="loader-value">00</span>
+  </div>
+
+  <header class="site-header" id="site-header">
+    <a class="brand" href="#top" aria-label="返回顶部">
+      <span class="brand-main">PW</span>
+      <span class="brand-dot"></span>
+    </a>
+    <div class="header-count"><span id="header-current">01</span> / <span id="header-total">00</span></div>
+    <button class="menu-button" id="menu-button" type="button" aria-label="打开照片索引" aria-expanded="false">
+      <span></span><span></span>
+    </button>
+  </header>
+
+  <aside class="menu-panel" id="menu-panel" aria-hidden="true">
+    <div class="menu-panel-inner">
+      <div class="menu-groups-head">
+        <p class="eyebrow">PHOTO GROUPS</p>
+        <span>选择要浏览的相册</span>
+      </div>
+      <div class="menu-groups" id="menu-groups"></div>
+      <p class="eyebrow menu-archive-label">MEMORY ARCHIVE</p>
+      <nav class="menu-list" id="menu-list"></nav>
+      <p class="menu-foot">DRAG, SCROLL, REMEMBER.</p>
+    </div>
+  </aside>
+
+  <div class="hm-wrapper" id="top">
+    <section class="hero-mask" id="hero-mask">
+      <div class="hm-bg"><img id="hm-bg-img" src="" alt=""></div>
+      <div class="hm-color"></div>
+      <div class="hm-vignette"></div>
+      <div class="hm-matte" id="hm-matte"></div>
+
+      <svg class="hm-cutout" id="hm-cutout" aria-label="照片墙 Photo Wall">
+        <defs>
+          <mask id="hm-text-mask">
+            <rect id="hm-mask-base" x="0" y="0" width="100%" height="100%" fill="white"></rect>
+            <g id="hm-mask-words" fill="black" text-anchor="middle">
+              <text class="hm-svg-title">照片墙</text>
+              <text class="hm-svg-subtitle">PHOTO WALL</text>
+            </g>
+          </mask>
+        </defs>
+        <rect class="hm-cutout-matte" x="0" y="0" width="100%" height="100%" mask="url(#hm-text-mask)"></rect>
+        <g id="hm-fill-words" class="hm-fill-words" text-anchor="middle">
+          <text class="hm-svg-title">照片墙</text>
+          <text class="hm-svg-subtitle">PHOTO WALL</text>
+        </g>
+      </svg>
+
+      <div class="scroll-cue">
+        <span>SCROLL TO EXPLORE</span>
+        <i></i>
+      </div>
+
+      <section class="release-panel" id="release-panel">
+        <div class="release-glow"></div>
+        <p class="eyebrow">A PERSONAL ARCHIVE</p>
+        <h1 class="release-title">
+          <span>瞬间</span>
+          <span>永不褪色</span>
+        </h1>
+        <div class="release-meta">
+          <span id="release-count">00 FRAMES</span>
+          <span>CAPTURED IN TIME</span>
+        </div>
+        <div class="release-arrow">⌄</div>
+      </section>
+
+      <div class="hm-flash" id="hm-flash"></div>
+    </section>
+    <div class="hm-spacer"></div>
+  </div>
+
+  <main id="main">
+    <section class="story-intro">
+      <div class="story-intro-image parallax-media">
+        <img id="story-cover" src="" alt="">
+      </div>
+      <div class="story-intro-copy reveal">
+        <p class="eyebrow">THE STORY SO FAR</p>
+        <h2 id="intro-quote">光影交错，时间在此停留。</h2>
+        <p>一些地点，一些面孔，一些无法重演的天气。照片替我们留住了当时没来得及认真凝视的部分。</p>
+      </div>
+    </section>
+
+    <div class="photo-stories" id="photo-sections"></div>
+
+    <section class="archive">
+      <div class="archive-head reveal">
+        <p class="eyebrow">FULL ARCHIVE</p>
+        <h2>全部影像</h2>
+        <p>拖动浏览 / DRAG TO EXPLORE</p>
+      </div>
+      <div class="strip-viewport" id="strip-viewport">
+        <div class="strip-track" id="strip-track"></div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p class="eyebrow reveal">END OF TRANSMISSION</p>
+      <div class="footer-mark reveal">PW</div>
+      <p class="footer-copy reveal">EVERY FRAME, A UNIQUE MOMENT.</p>
+      <button class="back-top reveal" id="back-top" type="button">返回顶部 ↑</button>
+    </footer>
+  </main>
+
+  <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-modal="true">
+    <button class="lightbox-overlay" type="button" aria-label="关闭"></button>
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="关闭">&times;</button>
+    <button class="lightbox-nav lightbox-prev" id="lightbox-prev" type="button" aria-label="上一张">‹</button>
+    <button class="lightbox-nav lightbox-next" id="lightbox-next" type="button" aria-label="下一张">›</button>
+    <div class="lightbox-content">
+      <img class="lightbox-img" id="lightbox-img" src="" alt="">
+      <div class="lightbox-caption" id="lightbox-caption"></div>
+    </div>
+    <div class="lightbox-counter" id="lightbox-counter"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
