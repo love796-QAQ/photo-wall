@@ -13,7 +13,10 @@
       <p>PHOTO WALL CONTROL ROOM</p>
       <h1>照片与分组</h1>
     </div>
-    <a href="/" class="view-link">查看照片墙 ↗</a>
+    <div class="header-actions">
+      <button id="admin-path-button" type="button">入口设置</button>
+      <a href="/" class="view-link">查看照片墙 ↗</a>
+    </div>
   </header>
 
   <main class="workspace">
@@ -93,6 +96,15 @@
       <div id="upload-file-summary" class="file-summary"></div>
       <label class="check-row"><input id="upload-resolve" type="checkbox"><span>为陌生 GPS 坐标联网查询中文地点</span></label>
       <div class="modal-actions"><button type="button" data-close>取消</button><button class="primary-button" type="submit">上传并分析</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="admin-path-modal">
+    <form id="admin-path-form" method="dialog">
+      <div class="modal-head"><h3>管理入口设置</h3><button type="button" data-close>×</button></div>
+      <p>公开首页不会显示管理入口。没有填写开头的 / 时会自动补全。</p>
+      <label class="field"><span>入口路径</span><input id="admin-path-input" maxlength="80" placeholder="/admin" required></label>
+      <div class="modal-actions"><button type="button" data-close>取消</button><button class="primary-button" type="submit">保存</button></div>
     </form>
   </dialog>
 

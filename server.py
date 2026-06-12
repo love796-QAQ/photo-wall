@@ -31,6 +31,7 @@ IMAGE_EXTS = extract_exif.IMAGE_EXTS
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ZIP_FILES = 2000
 DATA_LOCK = threading.Lock()
+DEFAULT_ADMIN_PATH = "/admin"
 extract_exif.configure_paths(DATA_DIR)
 
 
@@ -105,6 +106,67 @@ def has_db_groups():
     return bool(row["total"])
 
 
+def normalize_admin_path(path):
+    value = str(path or "").strip()
+    if not value:
+        raise ValueError("请输入管理入口路径")
+    if not value.startswith("/"):
+        value = "/" + value
+    value = value.rstrip("/") or "/"
+    if value == "/":
+        raise ValueError("管理入口不能是根路径")
+    if any(char.isspace() for char in value):
+        raise ValueError("管理入口不能包含空格")
+    if "\\" in value or "?" in value or "#" in value or ".." in value:
+        raise ValueError("管理入口包含不支持的字符")
+    reserved = (
+        "/api",
+        "/uploads",
+        "/photos",
+        "/admin.html",
+        "/index.html",
+        "/script.js",
+        "/style.css",
+        "/admin.js",
+        "/admin.css",
+    )
+    if value == reserved[0] or any(value.startswith(item + "/") or value == item for item in reserved):
+        raise ValueError("管理入口与系统路径冲突")
+    return value
+
+
+def default_admin_path():
+    return normalize_admin_path(os.environ.get("PHOTO_WALL_ADMIN_PATH", DEFAULT_ADMIN_PATH))
+
+
+def get_setting(key, default=None):
+    with connect_db() as connection:
+        row = connection.execute(
+            "SELECT value FROM settings WHERE key = ?",
+            (key,),
+        ).fetchone()
+    return row["value"] if row and row["value"] is not None else default
+
+
+def set_setting(key, value):
+    with connect_db() as connection:
+        connection.execute(
+            """
+            INSERT INTO settings (key, value)
+            VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (key, value),
+        )
+
+
+def get_admin_path():
+    try:
+        return normalize_admin_path(get_setting("admin_path", default_admin_path()))
+    except ValueError:
+        return DEFAULT_ADMIN_PATH
+
+
 def load_store():
     with connect_db() as connection:
         active_group_id = connection.execute(
@@ -157,13 +219,19 @@ def load_store():
 
 def save_store(store):
     with connect_db() as connection:
+        settings = {
+            row["key"]: row["value"]
+            for row in connection.execute("SELECT key, value FROM settings").fetchall()
+        }
+        settings["active_group_id"] = store.get("active_group_id")
         connection.execute("DELETE FROM photos")
         connection.execute("DELETE FROM groups")
         connection.execute("DELETE FROM settings")
-        connection.execute(
-            "INSERT INTO settings (key, value) VALUES ('active_group_id', ?)",
-            (store.get("active_group_id"),),
-        )
+        for key, value in settings.items():
+            connection.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                (key, value),
+            )
         for group_index, group in enumerate(store.get("groups", [])):
             connection.execute(
                 """
@@ -253,6 +321,8 @@ def initialize_store():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(exist_ok=True)
     initialize_db()
+    if not get_setting("admin_path"):
+        set_setting("admin_path", default_admin_path())
     if has_db_groups():
         return
     if GROUPS_FILE.exists():
@@ -471,8 +541,26 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
+        admin_path = get_admin_path()
+        if path != admin_path and path.rstrip("/") == admin_path:
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", admin_path)
+            self.end_headers()
+            return
+        if path == admin_path:
+            self.path = "/admin.html"
+            super().do_GET()
+            return
+        if path == "/admin.html":
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", admin_path)
+            self.end_headers()
+            return
         if path.startswith(("/uploads/", "/photos/")):
             self.serve_data_file(path)
+            return
+        if path == "/api/settings":
+            self.send_json({"ok": True, "admin_path": admin_path})
             return
         if path == "/api/groups":
             with DATA_LOCK:
@@ -563,6 +651,8 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
                 self.delete_group()
             elif path == "/api/photos/delete":
                 self.delete_photo()
+            elif path == "/api/settings/admin-path":
+                self.update_admin_path()
             else:
                 self.send_error_json("接口不存在", HTTPStatus.NOT_FOUND)
         except ValueError as error:
@@ -755,6 +845,13 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
             "show_story_cover_in_details": group["show_story_cover_in_details"],
         })
 
+    def update_admin_path(self):
+        payload = self.read_json_body()
+        admin_path = normalize_admin_path(payload.get("admin_path"))
+        with DATA_LOCK:
+            set_setting("admin_path", admin_path)
+        self.send_json({"ok": True, "admin_path": admin_path})
+
     def upload_photos(self):
         form = self.read_form()
         group_id = form.getfirst("group_id", "").strip()
@@ -867,7 +964,7 @@ def main():
     host = os.environ.get("PHOTO_WALL_HOST", "127.0.0.1")
     server = ThreadingHTTPServer((host, port), PhotoWallHandler)
     print(f"Photo Wall: http://{host}:{port}")
-    print(f"Admin:      http://{host}:{port}/admin.html")
+    print(f"Admin:      http://{host}:{port}{get_admin_path()}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

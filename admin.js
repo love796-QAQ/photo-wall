@@ -6,6 +6,7 @@
     activeGroupId: null,
     selectedGroupId: null,
     selectedGroup: null,
+    adminPath: '/admin',
     pendingFiles: []
   };
   var $ = function (selector) { return document.querySelector(selector); };
@@ -27,6 +28,11 @@
     renderGroups();
     if (state.selectedGroupId) await loadGroup(state.selectedGroupId);
     else renderEmpty();
+  }
+
+  async function loadSettings() {
+    var payload = await api('/api/settings');
+    state.adminPath = payload.admin_path || '/admin';
   }
 
   function renderGroups() {
@@ -242,6 +248,21 @@
     toast('压缩包已导入，共 ' + payload.uploaded + ' 张照片');
   }
 
+  async function saveAdminPath(value) {
+    var payload = await api('/api/settings/admin-path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ admin_path: value })
+    });
+    state.adminPath = payload.admin_path;
+    $('#admin-path-input').value = state.adminPath;
+    $('#admin-path-modal').close();
+    toast('管理入口已更新为 ' + state.adminPath);
+    if (window.location.pathname !== state.adminPath) {
+      window.history.replaceState(null, '', state.adminPath);
+    }
+  }
+
   function runBusy(form, task) {
     return async function (event) {
       event.preventDefault();
@@ -321,6 +342,12 @@
   });
   $('#new-group-button').addEventListener('click', function () { $('#new-group-modal').showModal(); });
   $('#import-zip-button').addEventListener('click', function () { $('#zip-modal').showModal(); });
+  $('#admin-path-button').addEventListener('click', function () {
+    $('#admin-path-input').value = state.adminPath || '/admin';
+    $('#admin-path-modal').showModal();
+    $('#admin-path-input').focus();
+    $('#admin-path-input').select();
+  });
   $('#refresh-groups').addEventListener('click', function () { loadGroups(false).catch(function (error) { toast(error.message, true); }); });
   $('#select-display-button').addEventListener('click', function () { selectDisplayGroup().catch(function (error) { toast(error.message, true); }); });
   $('#rename-group-button').addEventListener('click', function () {
@@ -345,7 +372,10 @@
     await renameGroup($('#rename-group-name').value.trim());
     $('#rename-group-modal').close();
   }));
+  $('#admin-path-form').addEventListener('submit', runBusy($('#admin-path-form'), async function () {
+    await saveAdminPath($('#admin-path-input').value.trim());
+  }));
 
   document.querySelectorAll('.modal').forEach(bindModal);
-  loadGroups(true).catch(function (error) { toast(error.message, true); });
+  Promise.all([loadSettings(), loadGroups(true)]).catch(function (error) { toast(error.message, true); });
 })();
