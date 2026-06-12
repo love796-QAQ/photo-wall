@@ -26,6 +26,7 @@
     heroFillWords: $('#hm-fill-words'),
     heroMaskBase: $('#hm-mask-base'),
     releasePanel: $('#release-panel'),
+    emptyHero: $('#empty-hero'),
     scrollCue: $('.scroll-cue'),
     storyCover: $('#story-cover'),
     stories: $('#photo-sections'),
@@ -62,9 +63,7 @@
     setCounts();
 
     if (!archivePhotos.length) {
-      if (elements.loaderValue) elements.loaderValue.textContent = '--';
-      if (elements.loaderBar) elements.loaderBar.style.width = '100%';
-      if (elements.loader) elements.loader.classList.add('hidden');
+      buildEmptyState();
       return;
     }
 
@@ -113,6 +112,30 @@
       '我们拍下的，也是我们成为的。',
       '记忆会模糊，影像不会。'
     ][Math.floor(Math.random() * 4)];
+  }
+
+  function buildEmptyState() {
+    document.body.classList.add('empty-state');
+    if (elements.heroImage) {
+      elements.heroImage.removeAttribute('src');
+      elements.heroImage.alt = '';
+    }
+    if (elements.storyCover) {
+      elements.storyCover.removeAttribute('src');
+      elements.storyCover.alt = '';
+    }
+    if (elements.emptyHero) elements.emptyHero.setAttribute('aria-hidden', 'false');
+    if (elements.releaseCount) elements.releaseCount.textContent = '00 FRAMES';
+    if (elements.headerCurrent) elements.headerCurrent.textContent = '00';
+    if (elements.headerTotal) elements.headerTotal.textContent = '00';
+    if (elements.stories) elements.stories.innerHTML = '';
+    if (elements.stripTrack) elements.stripTrack.innerHTML = '';
+    buildGroupMenu();
+    elements.menuList.innerHTML = '<a class="menu-admin-link" href="/admin.html">进入管理界面</a>';
+    setupControls();
+    if (elements.loaderValue) elements.loaderValue.textContent = '00';
+    if (elements.loaderBar) elements.loaderBar.style.width = '100%';
+    if (elements.loader) setTimeout(function () { elements.loader.classList.add('hidden'); }, 180);
   }
 
   function buildStories() {
