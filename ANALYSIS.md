@@ -4,10 +4,10 @@
 
 ## 网页管理
 
-启动 `server.py` 后访问：
+启动服务后访问：
 
 - 照片墙：`http://localhost:8765`
-- 管理页面：`http://localhost:8765/admin.html`
+- 管理页面：`http://localhost:8765/admin`
 
 管理页面支持：
 
@@ -39,19 +39,18 @@
 - `index.html`：页面结构、导航、首屏、档案区和 Lightbox
 - `style.css`：全部视觉样式、响应式布局和动效
 - `script.js`：照片章节生成、滚动进度、视差、菜单和 Lightbox
-- `photo_wall.db`：运行时 SQLite 数据库，保存分组、展示设置和照片元数据
-- `groups.json`：旧版分组数据；首次启动时会自动导入 SQLite
-- `photos.js`：旧版浏览器照片数据
-- `photos.json`：旧版照片数据的 JSON 版本；无分组数据时用于初始化默认相册
-- `extract_exif.py`：读取照片 EXIF 并生成两个数据文件
-- `scan_photos.ps1`：执行一次照片扫描
-- `auto_sync_photos.ps1`：监听照片目录并自动更新数据
+- `admin.html` / `admin.css` / `admin.js`：管理端页面
+- `server.py`：HTTP 服务、API、SQLite 持久化、上传处理
+- `extract_exif.py`：读取上传图片的 EXIF 和可选 GPS 反查
+- `Dockerfile` / `docker-compose.yml`：容器化部署配置
+- `.github/workflows/docker-image.yml`：构建并推送 GHCR 镜像
 
 ## 使用方式
 
-双击 `start_server.bat`，或在项目目录运行：
+本地直接运行：
 
-```powershell
+```bash
+pip install -r requirements.txt
 python server.py
 ```
 
@@ -78,37 +77,11 @@ PHOTO_WALL_IMAGE=ghcr.io/<owner>/<repo>:latest docker compose up -d
 - `data/photo_wall.db`：SQLite 数据库
 - `data/uploads/`：管理后台上传的图片
 - `data/photos/`：兼容旧版本地照片目录
+- `data/photos.json`：旧版照片数据导入来源
+- `data/groups.json`：旧版分组数据导入来源
 - `data/location_cache.json`：GPS 地点缓存
 
 如需迁移旧数据，可把现有 `groups.json`、`photos.json`、`photos/`、`uploads/` 复制到 `data/` 后再首次启动容器。
-
-添加或删除照片后运行：
-
-```powershell
-.\scan_photos.ps1
-```
-
-持续监听照片目录：
-
-```powershell
-.\auto_sync_photos.ps1
-```
-
-也可以双击 `start_auto_sync.bat`。此模式只读取本地 EXIF，并使用已有地点缓存。
-
-若希望新照片中的陌生 GPS 坐标也自动转换成中文地点，可双击：
-
-```text
-start_auto_sync_with_locations.bat
-```
-
-该模式会将尚未缓存的 GPS 坐标发送到 OpenStreetMap Nominatim，并把返回结果写入 `location_cache.json`。之后同一坐标无需再次联网查询。
-
-Python 扫描依赖 Pillow：
-
-```powershell
-pip install Pillow
-```
 
 ## 数据格式
 

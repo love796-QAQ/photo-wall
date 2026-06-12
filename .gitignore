@@ -4,6 +4,9 @@ __pycache__/
 # Runtime/generated content
 data/
 uploads/
+groups.json
+photos.json
+photos.js
 location_cache.json
 photo_wall.db
 photo_wall.db-*
