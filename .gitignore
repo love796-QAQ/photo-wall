@@ -4,6 +4,8 @@ __pycache__/
 # Runtime/generated content
 uploads/
 location_cache.json
+photo_wall.db
+photo_wall.db-*
 
 # Local photo library; remove this line if you want Git to track photos.
 photos/

@@ -39,8 +39,10 @@
 - `index.html`：页面结构、导航、首屏、档案区和 Lightbox
 - `style.css`：全部视觉样式、响应式布局和动效
 - `script.js`：照片章节生成、滚动进度、视差、菜单和 Lightbox
-- `photos.js`：浏览器读取的照片数据
-- `photos.json`：照片数据的 JSON 版本
+- `photo_wall.db`：运行时 SQLite 数据库，保存分组、展示设置和照片元数据
+- `groups.json`：旧版分组数据；首次启动时会自动导入 SQLite
+- `photos.js`：旧版浏览器照片数据
+- `photos.json`：旧版照片数据的 JSON 版本；无分组数据时用于初始化默认相册
 - `extract_exif.py`：读取照片 EXIF 并生成两个数据文件
 - `scan_photos.ps1`：执行一次照片扫描
 - `auto_sync_photos.ps1`：监听照片目录并自动更新数据

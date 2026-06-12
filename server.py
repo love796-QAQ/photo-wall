@@ -4,6 +4,7 @@ import json
 import mimetypes
 import os
 import shutil
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -21,6 +22,7 @@ import extract_exif
 
 ROOT = Path(__file__).resolve().parent
 GROUPS_FILE = ROOT / "groups.json"
+DB_FILE = ROOT / "photo_wall.db"
 UPLOADS_DIR = ROOT / "uploads"
 LEGACY_PHOTOS_DIR = ROOT / "photos"
 LEGACY_DATA_FILE = ROOT / "photos.json"
@@ -53,12 +55,154 @@ def write_json_atomic(path, payload):
     os.replace(temp, path)
 
 
+def connect_db():
+    connection = sqlite3.connect(DB_FILE)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
+def initialize_db():
+    with connect_db() as connection:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS groups (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                cover_photo_id TEXT,
+                story_cover_photo_id TEXT,
+                show_cover_in_details INTEGER NOT NULL DEFAULT 0,
+                show_story_cover_in_details INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS photos (
+                id TEXT PRIMARY KEY,
+                group_id TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                data TEXT NOT NULL,
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_photos_group_order
+                ON photos(group_id, sort_order);
+            """
+        )
+
+
+def has_db_groups():
+    with connect_db() as connection:
+        row = connection.execute("SELECT COUNT(*) AS total FROM groups").fetchone()
+    return bool(row["total"])
+
+
 def load_store():
-    return read_json(GROUPS_FILE, {"active_group_id": None, "groups": []})
+    with connect_db() as connection:
+        active_group_id = connection.execute(
+            "SELECT value FROM settings WHERE key = 'active_group_id'"
+        ).fetchone()
+        groups = []
+        group_rows = connection.execute(
+            """
+            SELECT *
+            FROM groups
+            ORDER BY sort_order, created_at, id
+            """
+        ).fetchall()
+        for group_row in group_rows:
+            photos = []
+            photo_rows = connection.execute(
+                """
+                SELECT data
+                FROM photos
+                WHERE group_id = ?
+                ORDER BY sort_order, id
+                """,
+                (group_row["id"],),
+            ).fetchall()
+            for photo_row in photo_rows:
+                try:
+                    photos.append(json.loads(photo_row["data"]))
+                except json.JSONDecodeError:
+                    continue
+            groups.append(
+                {
+                    "id": group_row["id"],
+                    "name": group_row["name"],
+                    "created_at": group_row["created_at"],
+                    "updated_at": group_row["updated_at"],
+                    "photos": photos,
+                    "cover_photo_id": group_row["cover_photo_id"],
+                    "story_cover_photo_id": group_row["story_cover_photo_id"],
+                    "show_cover_in_details": bool(group_row["show_cover_in_details"]),
+                    "show_story_cover_in_details": bool(
+                        group_row["show_story_cover_in_details"]
+                    ),
+                }
+            )
+    return {
+        "active_group_id": active_group_id["value"] if active_group_id else None,
+        "groups": groups,
+    }
 
 
 def save_store(store):
-    write_json_atomic(GROUPS_FILE, store)
+    with connect_db() as connection:
+        connection.execute("DELETE FROM photos")
+        connection.execute("DELETE FROM groups")
+        connection.execute("DELETE FROM settings")
+        connection.execute(
+            "INSERT INTO settings (key, value) VALUES ('active_group_id', ?)",
+            (store.get("active_group_id"),),
+        )
+        for group_index, group in enumerate(store.get("groups", [])):
+            connection.execute(
+                """
+                INSERT INTO groups (
+                    id,
+                    name,
+                    created_at,
+                    updated_at,
+                    cover_photo_id,
+                    story_cover_photo_id,
+                    show_cover_in_details,
+                    show_story_cover_in_details,
+                    sort_order
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    group["id"],
+                    group["name"],
+                    group["created_at"],
+                    group["updated_at"],
+                    group.get("cover_photo_id"),
+                    group.get("story_cover_photo_id"),
+                    int(bool(group.get("show_cover_in_details", False))),
+                    int(bool(group.get("show_story_cover_in_details", False))),
+                    group_index,
+                ),
+            )
+            for photo_index, photo in enumerate(group.get("photos", [])):
+                connection.execute(
+                    """
+                    INSERT INTO photos (id, group_id, sort_order, data)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        photo["id"],
+                        group["id"],
+                        photo_index,
+                        json.dumps(photo, ensure_ascii=False, separators=(",", ":")),
+                    ),
+                )
 
 
 def ensure_store_schema(store):
@@ -105,24 +249,27 @@ def ensure_store_schema(store):
 
 def initialize_store():
     UPLOADS_DIR.mkdir(exist_ok=True)
-    if GROUPS_FILE.exists():
+    initialize_db()
+    if has_db_groups():
         return
-
-    legacy_photos = read_json(LEGACY_DATA_FILE, [])
-    group_id = slug_id()
-    group = {
-        "id": group_id,
-        "name": "默认相册",
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-        "photos": legacy_photos,
-        "cover_photo_id": None,
-        "story_cover_photo_id": None,
-        "show_cover_in_details": False,
-        "show_story_cover_in_details": False,
-    }
-    store = {"active_group_id": group_id, "groups": [group]}
-    ensure_store_schema(store)
+    if GROUPS_FILE.exists():
+        store = read_json(GROUPS_FILE, {"active_group_id": None, "groups": []})
+    else:
+        legacy_photos = read_json(LEGACY_DATA_FILE, [])
+        group_id = slug_id()
+        group = {
+            "id": group_id,
+            "name": "默认相册",
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "photos": legacy_photos,
+            "cover_photo_id": None,
+            "story_cover_photo_id": None,
+            "show_cover_in_details": False,
+            "show_story_cover_in_details": False,
+        }
+        store = {"active_group_id": group_id, "groups": [group]}
+    save_store(ensure_store_schema(store))
 
 
 def find_group(store, group_id):
