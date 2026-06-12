@@ -19,12 +19,23 @@ except ImportError:
     print("请先安装 Pillow: pip install Pillow")
     sys.exit(1)
 
-PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photos")
-OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photos.js")
-OUTPUT_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photos.json")
-LOCATION_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "location_cache.json")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.abspath(os.environ.get("PHOTO_WALL_DATA_DIR", ROOT))
+PHOTOS_DIR = os.path.join(DATA_DIR, "photos")
+OUTPUT_FILE = os.path.join(DATA_DIR, "photos.js")
+OUTPUT_JSON = os.path.join(DATA_DIR, "photos.json")
+LOCATION_CACHE = os.path.join(DATA_DIR, "location_cache.json")
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif'}
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
+
+
+def configure_paths(data_dir):
+    global DATA_DIR, PHOTOS_DIR, OUTPUT_FILE, OUTPUT_JSON, LOCATION_CACHE
+    DATA_DIR = os.path.abspath(data_dir)
+    PHOTOS_DIR = os.path.join(DATA_DIR, "photos")
+    OUTPUT_FILE = os.path.join(DATA_DIR, "photos.js")
+    OUTPUT_JSON = os.path.join(DATA_DIR, "photos.json")
+    LOCATION_CACHE = os.path.join(DATA_DIR, "location_cache.json")
 
 
 def dms_to_decimal(v):

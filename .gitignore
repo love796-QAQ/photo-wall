@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 
 # Runtime/generated content
+data/
 uploads/
 location_cache.json
 photo_wall.db

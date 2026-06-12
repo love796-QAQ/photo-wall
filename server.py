@@ -15,21 +15,23 @@ from datetime import datetime
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import extract_exif
 
 
 ROOT = Path(__file__).resolve().parent
-GROUPS_FILE = ROOT / "groups.json"
-DB_FILE = ROOT / "photo_wall.db"
-UPLOADS_DIR = ROOT / "uploads"
-LEGACY_PHOTOS_DIR = ROOT / "photos"
-LEGACY_DATA_FILE = ROOT / "photos.json"
+DATA_DIR = Path(os.environ.get("PHOTO_WALL_DATA_DIR", ROOT)).resolve()
+GROUPS_FILE = DATA_DIR / "groups.json"
+DB_FILE = DATA_DIR / "photo_wall.db"
+UPLOADS_DIR = DATA_DIR / "uploads"
+LEGACY_PHOTOS_DIR = DATA_DIR / "photos"
+LEGACY_DATA_FILE = DATA_DIR / "photos.json"
 IMAGE_EXTS = extract_exif.IMAGE_EXTS
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ZIP_FILES = 2000
 DATA_LOCK = threading.Lock()
+extract_exif.configure_paths(DATA_DIR)
 
 
 def now_iso():
@@ -248,6 +250,7 @@ def ensure_store_schema(store):
 
 
 def initialize_store():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(exist_ok=True)
     initialize_db()
     if has_db_groups():
@@ -284,10 +287,25 @@ def remove_managed_file(store, photo):
         for item in group.get("photos", [])
     ):
         return
-    target = (ROOT / relative_path).resolve()
+    target = resolve_public_file(relative_path)
+    if not target:
+        return
     managed_roots = (UPLOADS_DIR.resolve(), LEGACY_PHOTOS_DIR.resolve())
     if any(target == root or root in target.parents for root in managed_roots):
         target.unlink(missing_ok=True)
+
+
+def resolve_public_file(relative_path):
+    relative_path = unquote(str(relative_path).replace("\\", "/")).lstrip("/")
+    if relative_path.startswith(("uploads/", "photos/")):
+        base = DATA_DIR
+    else:
+        base = ROOT
+    target = (base / relative_path).resolve()
+    allowed_roots = (ROOT.resolve(), UPLOADS_DIR.resolve(), LEGACY_PHOTOS_DIR.resolve())
+    if any(target == root or root in target.parents for root in allowed_roots):
+        return target
+    return None
 
 
 def public_store(store):
@@ -431,9 +449,31 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
     def send_error_json(self, message, status=HTTPStatus.BAD_REQUEST):
         self.send_json({"ok": False, "error": message}, status)
 
+    def serve_data_file(self, request_path):
+        target = resolve_public_file(request_path)
+        if not target or not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        try:
+            with open(target, "rb") as file:
+                data = file.read()
+        except OSError:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
+
     def do_GET(self):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
+        if path.startswith(("/uploads/", "/photos/")):
+            self.serve_data_file(path)
+            return
         if path == "/api/groups":
             with DATA_LOCK:
                 self.send_json({"ok": True, **public_store(load_store())})
@@ -824,9 +864,10 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
 def main():
     initialize_store()
     port = int(os.environ.get("PHOTO_WALL_PORT", "8765"))
-    server = ThreadingHTTPServer(("127.0.0.1", port), PhotoWallHandler)
-    print(f"Photo Wall: http://localhost:{port}")
-    print(f"Admin:      http://localhost:{port}/admin.html")
+    host = os.environ.get("PHOTO_WALL_HOST", "127.0.0.1")
+    server = ThreadingHTTPServer((host, port), PhotoWallHandler)
+    print(f"Photo Wall: http://{host}:{port}")
+    print(f"Admin:      http://{host}:{port}/admin.html")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

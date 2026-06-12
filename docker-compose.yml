@@ -1,0 +1,13 @@
+services:
+  photo-wall:
+    build: .
+    container_name: photo-wall
+    restart: unless-stopped
+    environment:
+      PHOTO_WALL_HOST: 0.0.0.0
+      PHOTO_WALL_PORT: 8765
+      PHOTO_WALL_DATA_DIR: /app/data
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ./data:/app/data

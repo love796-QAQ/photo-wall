@@ -1,0 +1,15 @@
+.git
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/
+uploads/
+photos/
+photo_wall.db
+photo_wall.db-*
+location_cache.json
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

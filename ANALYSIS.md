@@ -57,6 +57,25 @@ python server.py
 
 然后访问 `http://localhost:8765`。
 
+## Docker 部署
+
+构建并启动：
+
+```bash
+docker compose up -d --build
+```
+
+容器默认监听 `8765`，Compose 只绑定到宿主机 `127.0.0.1:8765`，适合放在 Nginx 后面反向代理。
+
+运行时数据挂载到项目目录的 `data/`：
+
+- `data/photo_wall.db`：SQLite 数据库
+- `data/uploads/`：管理后台上传的图片
+- `data/photos/`：兼容旧版本地照片目录
+- `data/location_cache.json`：GPS 地点缓存
+
+如需迁移旧数据，可把现有 `groups.json`、`photos.json`、`photos/`、`uploads/` 复制到 `data/` 后再首次启动容器。
+
 添加或删除照片后运行：
 
 ```powershell
