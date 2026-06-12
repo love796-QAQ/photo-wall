@@ -18,8 +18,6 @@
   var viewportHeight = window.innerHeight;
   var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
   var supportsStableViewport = CSS.supports('height: 100lvh');
-  var themeColor = '#090811';
-  var heroThemeColor = '#090811';
 
   var elements = {
     loader: $('#loader'),
@@ -49,9 +47,8 @@
     lightbox: $('#lightbox')
   };
 
-  var themeColorMeta = $('meta[name="theme-color"]');
-
   setStableViewportHeight();
+  setVisualViewport();
 
   function setStableViewportHeight() {
     viewportWidth = window.innerWidth;
@@ -71,6 +68,14 @@
       layoutHeroMask();
     }
     requestTick();
+  }
+
+  function setVisualViewport() {
+    var visualViewport = window.visualViewport;
+    var height = visualViewport ? visualViewport.height : window.innerHeight;
+    var offsetTop = visualViewport ? visualViewport.offsetTop : 0;
+    document.documentElement.style.setProperty('--visual-height', height + 'px');
+    document.documentElement.style.setProperty('--visual-offset-top', offsetTop + 'px');
   }
 
   async function init() {
@@ -133,7 +138,6 @@
     var narrativePhoto = storyCoverPhoto || archivePhotos[Math.min(1, archivePhotos.length - 1)];
     elements.heroImage.src = heroPhoto.path;
     elements.heroImage.alt = heroPhoto.location || heroPhoto.name;
-    updateHeroThemeColor(elements.heroImage);
     layoutHeroMask();
     elements.storyCover.src = narrativePhoto.path;
     elements.storyCover.alt = narrativePhoto.location || narrativePhoto.name;
@@ -293,9 +297,20 @@
   function setupControls() {
     window.addEventListener('scroll', requestTick, { passive: true });
     window.addEventListener('resize', handleViewportResize, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function () {
+        setVisualViewport();
+        requestTick();
+      }, { passive: true });
+      window.visualViewport.addEventListener('scroll', function () {
+        setVisualViewport();
+        requestTick();
+      }, { passive: true });
+    }
     window.addEventListener('orientationchange', function () {
       setTimeout(function () {
         setStableViewportHeight();
+        setVisualViewport();
         layoutHeroMask();
         requestTick();
       }, 120);
@@ -350,7 +365,6 @@
       updateHero();
       updateParallax();
       updateHeaderCounterVisibility();
-      updateThemeColor();
       ticking = false;
     });
   }
@@ -386,99 +400,6 @@
     elements.releasePanel.style.setProperty('--release-scale', mix(.94, 1, releaseEnter));
     elements.scrollCue.style.opacity = clamp(1 - progress * 4, 0, 1);
 
-  }
-
-  function updateHeroThemeColor(image) {
-    function sample() {
-      try {
-        var canvas = document.createElement('canvas');
-        var context = canvas.getContext('2d', { willReadFrequently: true });
-        canvas.width = 24;
-        canvas.height = 24;
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        var pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-        var red = 0;
-        var green = 0;
-        var blue = 0;
-        var weight = 0;
-
-        for (var i = 0; i < pixels.length; i += 4) {
-          var brightness = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
-          var pixelWeight = brightness > 235 ? .15 : 1;
-          red += pixels[i] * pixelWeight;
-          green += pixels[i + 1] * pixelWeight;
-          blue += pixels[i + 2] * pixelWeight;
-          weight += pixelWeight;
-        }
-
-        heroThemeColor = rgbToHex(
-          red / weight * .42,
-          green / weight * .42,
-          blue / weight * .42
-        );
-        updateThemeColor();
-      } catch (error) {
-        heroThemeColor = '#1b1117';
-        updateThemeColor();
-      }
-    }
-
-    if (image.complete && image.naturalWidth) sample();
-    else image.addEventListener('load', sample, { once: true });
-  }
-
-  function updateThemeColor() {
-    if (!themeColorMeta) return;
-
-    var sampleY = viewportHeight * .5;
-    var nextColor = '#090811';
-    var heroWrapper = $('.hm-wrapper');
-    var archive = $('.archive');
-    var footer = $('.footer');
-
-    if (containsViewportPoint(heroWrapper, sampleY)) {
-      var heroRange = Math.max(1, heroWrapper.offsetHeight - viewportHeight);
-      var heroProgress = clamp(window.scrollY / heroRange, 0, 1);
-      var heroFade = smoothstep(clamp((heroProgress - .42) / .25, 0, 1));
-      nextColor = mixHexColors(heroThemeColor, '#090811', heroFade);
-    } else if (containsViewportPoint(archive, sampleY)) {
-      nextColor = '#08070e';
-    } else if (containsViewportPoint(footer, sampleY)) {
-      nextColor = '#180b1d';
-    } else {
-      $$('.photo-story').some(function (story, index) {
-        if (!containsViewportPoint(story, sampleY)) return false;
-        nextColor = index % 2 === 0 ? '#0d0b15' : '#090811';
-        return true;
-      });
-    }
-
-    if (nextColor === themeColor) return;
-    themeColor = nextColor;
-    themeColorMeta.setAttribute('content', nextColor);
-    document.documentElement.style.setProperty('--browser-chrome-color', nextColor);
-  }
-
-  function containsViewportPoint(element, point) {
-    if (!element) return false;
-    var rect = element.getBoundingClientRect();
-    return rect.top <= point && rect.bottom >= point;
-  }
-
-  function rgbToHex(red, green, blue) {
-    return '#' + [red, green, blue].map(function (value) {
-      return Math.round(clamp(value, 0, 255)).toString(16).padStart(2, '0');
-    }).join('');
-  }
-
-  function mixHexColors(from, to, amount) {
-    var fromValue = parseInt(from.slice(1), 16);
-    var toValue = parseInt(to.slice(1), 16);
-    return rgbToHex(
-      mix((fromValue >> 16) & 255, (toValue >> 16) & 255, amount),
-      mix((fromValue >> 8) & 255, (toValue >> 8) & 255, amount),
-      mix(fromValue & 255, toValue & 255, amount)
-    );
   }
 
   function updateParallax() {

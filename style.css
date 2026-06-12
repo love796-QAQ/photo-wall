@@ -1,6 +1,5 @@
 :root {
   --bg: #090811;
-  --browser-chrome-color: #090811;
   --bg-soft: #11101a;
   --text: #fff8e7;
   --muted: rgba(255, 248, 231, 0.55);
@@ -13,6 +12,8 @@
   --sans: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
   --mono: "Cascadia Code", Consolas, monospace;
   --stable-vh: 1vh;
+  --visual-height: 100vh;
+  --visual-offset-top: 0px;
 }
 
 @supports (height: 100lvh) {
@@ -20,10 +21,10 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { background: var(--browser-chrome-color); scroll-behavior: smooth; scrollbar-width: none; }
+html { background: var(--bg); scroll-behavior: smooth; scrollbar-width: none; }
 html::-webkit-scrollbar { display: none; width: 0; height: 0; }
 body {
-  background: var(--browser-chrome-color);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
   overflow-x: hidden;
@@ -307,13 +308,19 @@ body::after {
 }
 .release-panel {
   position: absolute;
-  inset: 0;
+  top: var(--visual-offset-top);
+  right: 0;
+  left: 0;
+  height: var(--visual-height);
   z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8rem 2rem;
+  padding:
+    max(5rem, calc(2rem + env(safe-area-inset-top)))
+    2rem
+    max(5rem, calc(2rem + env(safe-area-inset-bottom)));
   overflow: hidden;
   text-align: center;
   opacity: 0;
