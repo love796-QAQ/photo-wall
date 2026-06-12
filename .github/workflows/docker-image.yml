@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - sqlite
+      - safari
     tags:
       - "v*"
   workflow_dispatch:
