@@ -628,6 +628,29 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def do_HEAD(self):
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
+        admin_path = get_admin_path()
+        if path != admin_path and path.rstrip("/") == admin_path:
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", admin_path)
+            self.end_headers()
+            return
+        if path == admin_path:
+            self.path = "/admin.html"
+            super().do_HEAD()
+            return
+        if path == "/admin.html":
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", admin_path)
+            self.end_headers()
+            return
+        if path.startswith(("/uploads/", "/photos/")):
+            self.serve_data_file(path)
+            return
+        super().do_HEAD()
+
     def do_POST(self):
         path = urlparse(self.path).path
         try:
