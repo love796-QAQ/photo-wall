@@ -1,6 +1,8 @@
 services:
   photo-wall:
-    build: .
+    image: ${PHOTO_WALL_IMAGE:-photo-wall:local}
+    build:
+      context: .
     container_name: photo-wall
     restart: unless-stopped
     environment:

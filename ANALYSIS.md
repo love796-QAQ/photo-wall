@@ -65,6 +65,12 @@ python server.py
 docker compose up -d --build
 ```
 
+使用 GitHub Actions 推送到 GHCR 后，服务器可直接拉取镜像：
+
+```bash
+PHOTO_WALL_IMAGE=ghcr.io/<owner>/<repo>:latest docker compose up -d
+```
+
 容器默认监听 `8765`，Compose 只绑定到宿主机 `127.0.0.1:8765`，适合放在 Nginx 后面反向代理。
 
 运行时数据挂载到项目目录的 `data/`：
