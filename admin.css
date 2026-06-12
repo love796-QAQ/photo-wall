@@ -25,7 +25,7 @@ button { cursor: pointer; }
 .header-actions button { padding: .55rem .7rem; color: var(--muted); background: transparent; border: 1px solid var(--line); font: 700 .62rem/1 var(--mono); letter-spacing: .12em; }
 .header-actions button:hover { color: var(--text); border-color: rgba(255,255,255,.3); }
 .view-link { color: var(--text); font: 700 .68rem/1 var(--mono); letter-spacing: .12em; text-decoration: none; }
-.workspace { height: calc(100vh - 150px); display: grid; grid-template-columns: minmax(270px, 22vw) 1fr; }
+.workspace { height: calc(100vh - 150px); height: calc(100svh - 150px); display: grid; grid-template-columns: minmax(270px, 22vw) 1fr; }
 .groups-pane, .content-pane { min-height: 0; background: var(--panel); }
 .groups-pane { display: flex; flex-direction: column; border-right: 1px solid var(--line); }
 .pane-toolbar, .content-toolbar { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid var(--line); }
@@ -111,7 +111,7 @@ button { cursor: pointer; }
 .add-card:hover { color: var(--text); border-color: var(--pink); }
 .add-card span { display: block; color: var(--pink); font-size: 3rem; font-weight: 200; text-align: center; }
 .add-card strong { display: block; margin-top: .5rem; font-size: .8rem; }
-.empty-state { min-height: 60vh; display: grid; place-items: center; color: var(--muted); }
+.empty-state { min-height: 60vh; min-height: 60svh; display: grid; place-items: center; color: var(--muted); }
 .modal { width: min(520px, calc(100vw - 2rem)); padding: 0; color: var(--text); background: var(--panel); border: 1px solid var(--line); }
 .modal::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(8px); }
 .modal form { display: grid; gap: 1rem; padding: 1.5rem; }
@@ -137,8 +137,8 @@ button { cursor: pointer; }
   .admin-header { height: auto; grid-template-columns: auto 1fr; }
   .header-actions { grid-column: 2; justify-content: flex-end; flex-wrap: wrap; }
   .workspace { height: auto; grid-template-columns: 1fr; }
-  .groups-pane { max-height: 48vh; border-right: 0; border-bottom: 1px solid var(--line); }
-  .content-pane { min-height: 70vh; }
+  .groups-pane { max-height: 48vh; max-height: 48svh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .content-pane { min-height: 70vh; min-height: 70svh; }
   .content-toolbar { align-items: flex-start; gap: 1rem; }
   .content-meta { flex-direction: column; align-items: flex-end; }
   .photo-scroll { overflow: visible; padding: 1rem; }

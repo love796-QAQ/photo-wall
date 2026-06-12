@@ -14,6 +14,10 @@
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var lightboxIndex = -1;
   var ticking = false;
+  var viewportWidth = window.innerWidth;
+  var viewportHeight = window.innerHeight;
+  var coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  var supportsStableViewport = CSS.supports('height: 100lvh');
 
   var elements = {
     loader: $('#loader'),
@@ -42,6 +46,28 @@
     releaseCount: $('#release-count'),
     lightbox: $('#lightbox')
   };
+
+  setStableViewportHeight();
+
+  function setStableViewportHeight() {
+    viewportWidth = window.innerWidth;
+    if (supportsStableViewport) {
+      document.documentElement.style.removeProperty('--stable-vh');
+      viewportHeight = elements.hero.getBoundingClientRect().height || window.innerHeight;
+    } else {
+      viewportHeight = window.innerHeight;
+      document.documentElement.style.setProperty('--stable-vh', viewportHeight * .01 + 'px');
+    }
+  }
+
+  function handleViewportResize() {
+    var widthChanged = Math.abs(window.innerWidth - viewportWidth) > 2;
+    if (widthChanged || !coarsePointer) {
+      setStableViewportHeight();
+      layoutHeroMask();
+    }
+    requestTick();
+  }
 
   async function init() {
     try {
@@ -261,9 +287,13 @@
 
   function setupControls() {
     window.addEventListener('scroll', requestTick, { passive: true });
-    window.addEventListener('resize', function () {
-      layoutHeroMask();
-      requestTick();
+    window.addEventListener('resize', handleViewportResize, { passive: true });
+    window.addEventListener('orientationchange', function () {
+      setTimeout(function () {
+        setStableViewportHeight();
+        layoutHeroMask();
+        requestTick();
+      }, 120);
     }, { passive: true });
 
     $('#back-top').addEventListener('click', function () {
@@ -320,7 +350,7 @@
   }
 
   function updateHero() {
-    var range = Math.max(1, $('.hm-wrapper').offsetHeight - window.innerHeight);
+    var range = Math.max(1, $('.hm-wrapper').offsetHeight - viewportHeight);
     var progress = clamp(window.scrollY / range, 0, 1);
     var maskStart = .06;
     var maskProgress = clamp((progress - maskStart) / .16, 0, 1);
@@ -333,11 +363,11 @@
     var handoff = smoothstep(clamp((progress - .7) / .18, 0, 1));
     var releaseEnter = smoothstep(clamp((progress - .73) / .18, 0, 1));
     var cx = window.innerWidth / 2;
-    var cy = window.innerHeight / 2;
+    var cy = viewportHeight / 2;
     var finalLogoScale = window.innerWidth < 800 ? .72 : .58;
     var handoffScale = mix(1, finalLogoScale, handoff);
     var logoX = mix(cx, window.innerWidth < 800 ? window.innerWidth * .18 : window.innerWidth * .13, handoff);
-    var logoY = mix(cy, window.innerHeight < 700 ? 105 : 125, handoff);
+    var logoY = mix(cy, viewportHeight < 700 ? 105 : 125, handoff);
     var transform = 'translate(' + logoX + ' ' + logoY + ') scale(' + (logoScale * handoffScale) + ') translate(' + (-cx) + ' ' + (-cy) + ')';
 
     elements.heroMaskWords.setAttribute('transform', transform);
@@ -346,7 +376,7 @@
     elements.heroFillWords.style.opacity = fill * (1 - handoff * .35);
     elements.hero.style.setProperty('--cover-opacity', 1 - coverFade);
     elements.releasePanel.style.opacity = releaseEnter;
-    elements.releasePanel.style.setProperty('--release-y', mix(10, 0, releaseEnter) + 'vh');
+    elements.releasePanel.style.setProperty('--release-y', mix(viewportHeight * .1, 0, releaseEnter) + 'px');
     elements.releasePanel.style.setProperty('--release-scale', mix(.94, 1, releaseEnter));
     elements.scrollCue.style.opacity = clamp(1 - progress * 4, 0, 1);
 
@@ -356,15 +386,15 @@
     if (reducedMotion) return;
     $$('.parallax-media').forEach(function (media) {
       var rect = media.getBoundingClientRect();
-      if (rect.bottom < 0 || rect.top > window.innerHeight) return;
-      var progress = (window.innerHeight - rect.top) / (window.innerHeight + rect.height);
+      if (rect.bottom < 0 || rect.top > viewportHeight) return;
+      var progress = (viewportHeight - rect.top) / (viewportHeight + rect.height);
       media.style.setProperty('--media-y', mix(-4, 0, clamp(progress, 0, 1)) + '%');
     });
   }
 
   function layoutHeroMask() {
     var width = window.innerWidth;
-    var height = window.innerHeight;
+    var height = viewportHeight;
     var titleLength = Array.from(currentGroupName || '照片墙').length;
     var baseTitleSize = width * (width < 800 ? .09 : .058);
     var fittedTitleSize = width / Math.max(4.2, titleLength * .96);
@@ -412,7 +442,7 @@
     if (!elements.siteHeader || !elements.stories) return;
     var storiesTop = elements.stories.getBoundingClientRect().top;
     var storiesBottom = elements.stories.getBoundingClientRect().bottom;
-    var marker = window.innerHeight * .45;
+    var marker = viewportHeight * .45;
     var inStories = storiesTop <= marker && storiesBottom >= marker;
     var menuOpen = elements.menuPanel.classList.contains('open');
     elements.siteHeader.classList.toggle('header-counter-hidden', !inStories || menuOpen);
