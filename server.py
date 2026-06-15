@@ -47,7 +47,7 @@ MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ZIP_FILES = 2000
 DATA_LOCK = threading.Lock()
 DEFAULT_ADMIN_PATH = "/admin"
-APP_VERSION = os.environ.get("PHOTO_WALL_VERSION", "1.0")
+APP_VERSION = os.environ.get("PHOTO_WALL_VERSION", "dev")
 UNCHANGED = object()
 extract_exif.configure_paths(DATA_DIR)
 
