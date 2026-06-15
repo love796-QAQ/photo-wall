@@ -130,8 +130,8 @@ button { cursor: pointer; }
 .modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .5rem; }
 .modal-actions button { padding: .75rem 1rem; background: transparent; border: 1px solid var(--line); }
 .modal-actions .primary-button { color: #160c14; background: linear-gradient(90deg, var(--pink), var(--orange)); border: 0; font-weight: 900; }
-.toast { position: fixed; left: 50%; bottom: 1.5rem; z-index: 20; padding: .8rem 1.1rem; color: #111; background: white; transform: translate(-50%, 160%); transition: transform .3s; }
-.toast.show { transform: translate(-50%, 0); }
+.toast { position: fixed; left: 50%; bottom: 1.5rem; z-index: 20; padding: .8rem 1.1rem; color: #111; background: white; transform: translate(-50%, 160%); transition: transform .3s; visibility: hidden; }
+.toast.show { transform: translate(-50%, 0); visibility: visible; }
 .toast.error { color: white; background: #f45; }
 @media (max-width: 750px) {
   body { overflow: auto; }
