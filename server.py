@@ -31,7 +31,8 @@ STATIC_CACHE_EXTS = {".css", ".js", ".png", ".ico", ".svg", ".woff2"}
 
 
 def is_cacheable_static(path):
-    _, ext = os.path.splitext(path)
+    clean = path.split("?")[0]
+    _, ext = os.path.splitext(clean)
     return ext.lower() in STATIC_CACHE_EXTS
 IMAGE_EXTS = extract_exif.IMAGE_EXTS
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
