@@ -9,6 +9,7 @@ services:
       PHOTO_WALL_HOST: 0.0.0.0
       PHOTO_WALL_PORT: 8765
       PHOTO_WALL_DATA_DIR: /app/data
+      PHOTO_WALL_REQUEST_LOG: ${PHOTO_WALL_REQUEST_LOG:-errors}
     ports:
       - "127.0.0.1:8765:8765"
     volumes:

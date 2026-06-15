@@ -48,6 +48,7 @@ MAX_ZIP_FILES = 2000
 DATA_LOCK = threading.Lock()
 DEFAULT_ADMIN_PATH = "/admin"
 APP_VERSION = os.environ.get("PHOTO_WALL_VERSION", "dev")
+REQUEST_LOG_MODE = os.environ.get("PHOTO_WALL_REQUEST_LOG", "errors").strip().lower()
 UNCHANGED = object()
 extract_exif.configure_paths(DATA_DIR)
 
@@ -622,7 +623,9 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def log_request(self, code="-", size="-"):
-        if isinstance(code, int) and code < 400:
+        if REQUEST_LOG_MODE == "off":
+            return
+        if REQUEST_LOG_MODE != "all" and isinstance(code, int) and code < 400:
             return
         super().log_request(code, size)
 
