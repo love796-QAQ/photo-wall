@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - sqlite
+      - optimize-backend
     tags:
       - "v*"
   workflow_dispatch:
