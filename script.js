@@ -1,6 +1,34 @@
 (function () {
   'use strict';
 
+  var COPY = {
+    TITLE_FALLBACK: '照片墙',
+    UNTITLED: 'UNTITLED',
+    UNKNOWN_DATE: 'DATE UNKNOWN',
+    UNKNOWN_CAMERA: 'UNKNOWN CAMERA',
+    EMPTY_NOTE: '暂无相册内容',
+    STORY_INTRO: '照片没有解释当时发生了什么，它只保留光线、距离和按下快门的那一刻。',
+    FRAME_NOTES: 'FRAME NOTES',
+    CAPTION_SUFFIX: '，与上一帧共同构成这一段记忆。',
+    TIME_UNRECORDED: '时间未记录',
+    ERROR_LOAD: '无法加载照片数据，请刷新页面重试。',
+    QUOTES: [
+      '城市很吵，记忆却总是无声。',
+      '那天的光线，比日期更容易被想起。',
+      '走过以后，风景才有了名字。',
+      '快门落下，时间短暂停止。',
+      '远方不是地点，是一段正在发生的生活。',
+      '有些画面，后来成了答案。',
+      '我们终究会回到这些瞬间。'
+    ],
+    INTRO_QUOTES: [
+      '光影交错，时间在此停留。',
+      '有些瞬间，只发生一次。',
+      '我们拍下的，也是我们成为的。',
+      '记忆会模糊，影像不会。'
+    ]
+  };
+
   var photos = [];
   var archivePhotos = [];
   var coverPhoto = null;
@@ -8,42 +36,43 @@
   var availableGroups = [];
   var defaultGroupId = null;
   var currentGroupId = null;
-  var currentGroupName = '照片墙';
-  var $ = function (selector, scope) { return (scope || document).querySelector(selector); };
-  var $$ = function (selector, scope) { return Array.from((scope || document).querySelectorAll(selector)); };
+  var currentGroupName = COPY.TITLE_FALLBACK;
+  var qs = function (selector, scope) { return (scope || document).querySelector(selector); };
+  var qsa = function (selector, scope) { return Array.from((scope || document).querySelectorAll(selector)); };
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var lightboxIndex = -1;
   var ticking = false;
 
   var elements = {
-    loader: $('#loader'),
-    loaderBar: $('#loader-bar'),
-    loaderValue: $('#loader-value'),
-    hero: $('#hero-mask'),
-    heroImage: $('#hm-bg-img'),
-    heroCutout: $('#hm-cutout'),
-    heroMaskWords: $('#hm-mask-words'),
-    heroFillWords: $('#hm-fill-words'),
-    heroMaskBase: $('#hm-mask-base'),
-    releasePanel: $('#release-panel'),
-    emptyHero: $('#empty-hero'),
-    scrollCue: $('.scroll-cue'),
-    storyCover: $('#story-cover'),
-    stories: $('#photo-sections'),
-    stripTrack: $('#strip-track'),
-    stripViewport: $('#strip-viewport'),
-    menuButton: $('#menu-button'),
-    menuPanel: $('#menu-panel'),
-    menuGroups: $('#menu-groups'),
-    menuList: $('#menu-list'),
-    siteHeader: $('#site-header'),
-    headerCurrent: $('#header-current'),
-    headerTotal: $('#header-total'),
-    releaseCount: $('#release-count'),
-    lightbox: $('#lightbox')
+    loader: qs('#loader'),
+    loaderBar: qs('#loader-bar'),
+    loaderValue: qs('#loader-value'),
+    hero: qs('#hero-mask'),
+    heroImage: qs('#hm-bg-img'),
+    heroCutout: qs('#hm-cutout'),
+    heroMaskWords: qs('#hm-mask-words'),
+    heroFillWords: qs('#hm-fill-words'),
+    heroMaskBase: qs('#hm-mask-base'),
+    releasePanel: qs('#release-panel'),
+    emptyHero: qs('#empty-hero'),
+    scrollCue: qs('.scroll-cue'),
+    storyCover: qs('#story-cover'),
+    stories: qs('#photo-sections'),
+    stripTrack: qs('#strip-track'),
+    stripViewport: qs('#strip-viewport'),
+    menuButton: qs('#menu-button'),
+    menuPanel: qs('#menu-panel'),
+    menuGroups: qs('#menu-groups'),
+    menuList: qs('#menu-list'),
+    siteHeader: qs('#site-header'),
+    headerCurrent: qs('#header-current'),
+    headerTotal: qs('#header-total'),
+    releaseCount: qs('#release-count'),
+    lightbox: qs('#lightbox')
   };
 
   async function init() {
+    var ok = false;
     try {
       var responses = await Promise.all([
         fetch('/api/groups', { cache: 'no-store' }),
@@ -54,19 +83,17 @@
       availableGroups = groupsPayload.groups || [];
       defaultGroupId = groupsPayload.active_group_id;
       applyGroupPayload(payload);
+      ok = true;
     } catch (error) {
-      photos = typeof photoData !== 'undefined' ? photoData : [];
-      archivePhotos = photos;
-      coverPhoto = photos[0];
-      storyCoverPhoto = photos[Math.min(1, photos.length - 1)];
+      console.error('Photo Wall init failed:', error);
     }
-    setCounts();
 
-    if (!archivePhotos.length) {
-      buildEmptyState();
+    if (!ok || !archivePhotos.length) {
+      showErrorState(ok ? null : COPY.ERROR_LOAD);
       return;
     }
 
+    setCounts();
     buildHero();
     buildStories();
     buildArchive();
@@ -78,6 +105,27 @@
     requestTick();
   }
 
+  function showErrorState(message) {
+    if (message) {
+      document.body.classList.add('empty-state');
+      if (elements.emptyHero) {
+        elements.emptyHero.setAttribute('aria-hidden', 'false');
+        var h1 = elements.emptyHero.querySelector('h1');
+        var p = elements.emptyHero.querySelector('p');
+        if (h1) h1.textContent = '出错了';
+        if (p) p.textContent = message;
+      }
+      if (elements.releaseCount) elements.releaseCount.textContent = '00 FRAMES';
+      if (elements.stories) elements.stories.innerHTML = '';
+      if (elements.stripTrack) elements.stripTrack.innerHTML = '';
+      if (elements.loaderValue) elements.loaderValue.textContent = '00';
+      if (elements.loaderBar) elements.loaderBar.style.width = '100%';
+      if (elements.loader) setTimeout(function () { elements.loader.classList.add('hidden'); }, 180);
+      return;
+    }
+    buildEmptyState();
+  }
+
   function applyGroupPayload(payload) {
     var group = payload.group;
     photos = group ? group.photos : [];
@@ -85,8 +133,8 @@
     coverPhoto = group ? group.cover_photo : photos[0];
     storyCoverPhoto = group ? group.story_cover_photo : photos[Math.min(1, photos.length - 1)];
     currentGroupId = group ? group.id : null;
-    currentGroupName = group ? group.name : '照片墙';
-    $$('.hm-svg-title').forEach(function (title) {
+    currentGroupName = group ? group.name : COPY.TITLE_FALLBACK;
+    qsa('.hm-svg-title').forEach(function (title) {
       title.textContent = currentGroupName;
     });
     elements.heroCutout.setAttribute('aria-label', currentGroupName + ' Photo Wall');
@@ -106,12 +154,8 @@
     layoutHeroMask();
     elements.storyCover.src = narrativePhoto.path;
     elements.storyCover.alt = narrativePhoto.location || narrativePhoto.name;
-    $('#intro-quote').textContent = [
-      '光影交错，时间在此停留。',
-      '有些瞬间，只发生一次。',
-      '我们拍下的，也是我们成为的。',
-      '记忆会模糊，影像不会。'
-    ][Math.floor(Math.random() * 4)];
+    var introEl = qs('#intro-quote');
+    if (introEl) introEl.textContent = COPY.INTRO_QUOTES[Math.floor(Math.random() * COPY.INTRO_QUOTES.length)];
   }
 
   function buildEmptyState() {
@@ -131,7 +175,7 @@
     if (elements.stories) elements.stories.innerHTML = '';
     if (elements.stripTrack) elements.stripTrack.innerHTML = '';
     buildGroupMenu();
-    elements.menuList.innerHTML = '<span class="menu-empty-note">暂无相册内容</span>';
+    elements.menuList.innerHTML = '<span class="menu-empty-note">' + COPY.EMPTY_NOTE + '</span>';
     setupControls();
     if (elements.loaderValue) elements.loaderValue.textContent = '00';
     if (elements.loaderBar) elements.loaderBar.style.width = '100%';
@@ -149,8 +193,8 @@
       var secondary = group[1];
       var place = splitLocation(primary.location);
       var title = place.title || cleanName(primary.name);
-      var date = primary.date || 'DATE UNKNOWN';
-      var camera = primary.camera || 'UNKNOWN CAMERA';
+      var date = primary.date || COPY.UNKNOWN_DATE;
+      var camera = primary.camera || COPY.UNKNOWN_CAMERA;
       var titleClass = title.length > 6 ? ' long' : '';
 
       return [
@@ -161,13 +205,13 @@
             place.detail ? '<p class="story-place-detail">' + esc(place.detail) + '</p>' : '',
             '<p class="story-date">', esc(date), ' · ', esc(camera), '</p>',
             '<p class="story-quote">', esc(storyLine(index)), '</p>',
-            '<p class="story-copy">照片没有解释当时发生了什么，它只保留光线、距离和按下快门的那一刻。</p>',
+            '<p class="story-copy">', COPY.STORY_INTRO, '</p>',
           '</div>',
           mediaMarkup(primary, 'story-media-primary'),
           mediaMarkup(secondary, 'story-media-secondary'),
           '<div class="story-caption reveal">',
-            '<p class="eyebrow">FRAME NOTES</p>',
-            '<p>', esc(secondary.location || cleanName(secondary.name)), '。', esc(secondary.date || '时间未记录'), '，与上一帧共同构成这一段记忆。</p>',
+            '<p class="eyebrow">', COPY.FRAME_NOTES, '</p>',
+            '<p>', esc(secondary.location || cleanName(secondary.name)), '。', esc(secondary.date || COPY.TIME_UNRECORDED), COPY.CAPTION_SUFFIX, '</p>',
           '</div>',
         '</article>'
       ].join('');
@@ -200,7 +244,7 @@
   }
 
   function buildMenu() {
-    var stories = $$('.photo-story');
+    var stories = qsa('.photo-story');
     elements.menuList.innerHTML = stories.map(function (story, index) {
       var photo = photos[index * 2];
       return [
@@ -266,7 +310,7 @@
       requestTick();
     }, { passive: true });
 
-    $('#back-top').addEventListener('click', function () {
+    qs('#back-top').addEventListener('click', function () {
       window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
     });
 
@@ -288,10 +332,10 @@
       if (target) openLightbox(Number(target.dataset.photoIndex));
     });
 
-    $('#lightbox-close').addEventListener('click', closeLightbox);
-    $('.lightbox-overlay').addEventListener('click', closeLightbox);
-    $('#lightbox-prev').addEventListener('click', function () { navigateLightbox(-1); });
-    $('#lightbox-next').addEventListener('click', function () { navigateLightbox(1); });
+    qs('#lightbox-close').addEventListener('click', closeLightbox);
+    qs('.lightbox-overlay').addEventListener('click', closeLightbox);
+    qs('#lightbox-prev').addEventListener('click', function () { navigateLightbox(-1); });
+    qs('#lightbox-next').addEventListener('click', function () { navigateLightbox(1); });
 
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') {
@@ -320,7 +364,7 @@
   }
 
   function updateHero() {
-    var range = Math.max(1, $('.hm-wrapper').offsetHeight - window.innerHeight);
+    var range = Math.max(1, qs('.hm-wrapper').offsetHeight - window.innerHeight);
     var progress = clamp(window.scrollY / range, 0, 1);
     var maskStart = .06;
     var maskProgress = clamp((progress - maskStart) / .16, 0, 1);
@@ -349,12 +393,11 @@
     elements.releasePanel.style.setProperty('--release-y', mix(10, 0, releaseEnter) + 'vh');
     elements.releasePanel.style.setProperty('--release-scale', mix(.94, 1, releaseEnter));
     elements.scrollCue.style.opacity = clamp(1 - progress * 4, 0, 1);
-
   }
 
   function updateParallax() {
     if (reducedMotion) return;
-    $$('.parallax-media').forEach(function (media) {
+    qsa('.parallax-media').forEach(function (media) {
       var rect = media.getBoundingClientRect();
       if (rect.bottom < 0 || rect.top > window.innerHeight) return;
       var progress = (window.innerHeight - rect.top) / (window.innerHeight + rect.height);
@@ -365,7 +408,7 @@
   function layoutHeroMask() {
     var width = window.innerWidth;
     var height = window.innerHeight;
-    var titleLength = Array.from(currentGroupName || '照片墙').length;
+    var titleLength = Array.from(currentGroupName || COPY.TITLE_FALLBACK).length;
     var baseTitleSize = width * (width < 800 ? .09 : .058);
     var fittedTitleSize = width / Math.max(4.2, titleLength * .96);
     var titleSize = Math.min(baseTitleSize, fittedTitleSize);
@@ -378,13 +421,13 @@
     elements.heroCutout.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
     elements.heroMaskBase.setAttribute('width', width);
     elements.heroMaskBase.setAttribute('height', height);
-    $$('.hm-svg-title').forEach(function (text) {
+    qsa('.hm-svg-title').forEach(function (text) {
       text.setAttribute('x', centerX);
       text.setAttribute('y', titleY);
       text.setAttribute('font-size', titleSize);
       text.setAttribute('dominant-baseline', 'middle');
     });
-    $$('.hm-svg-subtitle').forEach(function (text) {
+    qsa('.hm-svg-subtitle').forEach(function (text) {
       text.setAttribute('x', centerX);
       text.setAttribute('y', subtitleY);
       text.setAttribute('font-size', subtitleSize);
@@ -394,7 +437,7 @@
 
   function setupReveal() {
     if (!('IntersectionObserver' in window)) {
-      $$('.reveal').forEach(function (element) { element.classList.add('visible'); });
+      qsa('.reveal').forEach(function (element) { element.classList.add('visible'); });
       return;
     }
     var observer = new IntersectionObserver(function (entries) {
@@ -405,7 +448,7 @@
         }
       });
     }, { threshold: .16, rootMargin: '0px 0px -6% 0px' });
-    $$('.reveal').forEach(function (element) { observer.observe(element); });
+    qsa('.reveal').forEach(function (element) { observer.observe(element); });
   }
 
   function updateHeaderCounterVisibility() {
@@ -421,7 +464,7 @@
 
     var closestIndex = 0;
     var closestDistance = Infinity;
-    $$('.photo-story').forEach(function (story, index) {
+    qsa('.photo-story').forEach(function (story, index) {
       var rect = story.getBoundingClientRect();
       var distance = marker >= rect.top && marker <= rect.bottom
         ? 0
@@ -438,6 +481,9 @@
 
   function preloadOpeningImages() {
     var sources = archivePhotos.slice(0, Math.min(5, archivePhotos.length)).map(function (photo) { return photo.path; });
+    if (coverPhoto && coverPhoto.path) sources.unshift(coverPhoto.path);
+    var seen = {};
+    sources = sources.filter(function (p) { if (seen[p]) return false; seen[p] = true; return true; });
     var complete = 0;
 
     function done() {
@@ -503,11 +549,11 @@
 
   function updateLightbox() {
     var photo = archivePhotos[lightboxIndex];
-    var image = $('#lightbox-img');
+    var image = qs('#lightbox-img');
     image.src = photo.path;
     image.alt = photo.location || photo.name;
-    $('#lightbox-caption').textContent = [photo.location, photo.date, photo.camera, photo.name].filter(Boolean).join(' · ');
-    $('#lightbox-counter').textContent = String(lightboxIndex + 1).padStart(2, '0') + ' / ' + String(archivePhotos.length).padStart(2, '0');
+    qs('#lightbox-caption').textContent = [photo.location, photo.date, photo.camera, photo.name].filter(Boolean).join(' · ');
+    qs('#lightbox-counter').textContent = String(lightboxIndex + 1).padStart(2, '0') + ' / ' + String(archivePhotos.length).padStart(2, '0');
   }
 
   function setupDragScroll() {
@@ -559,29 +605,21 @@
 
   function setupLightboxSwipe() {
     var startX = 0;
-    $('#lightbox-img').addEventListener('touchstart', function (event) {
+    qs('#lightbox-img').addEventListener('touchstart', function (event) {
       startX = event.touches[0].clientX;
     }, { passive: true });
-    $('#lightbox-img').addEventListener('touchend', function (event) {
+    qs('#lightbox-img').addEventListener('touchend', function (event) {
       var delta = event.changedTouches[0].clientX - startX;
       if (Math.abs(delta) > 50) navigateLightbox(delta > 0 ? -1 : 1);
     }, { passive: true });
   }
 
   function storyLine(index) {
-    return [
-      '城市很吵，记忆却总是无声。',
-      '那天的光线，比日期更容易被想起。',
-      '走过以后，风景才有了名字。',
-      '快门落下，时间短暂停止。',
-      '远方不是地点，是一段正在发生的生活。',
-      '有些画面，后来成了答案。',
-      '我们终究会回到这些瞬间。'
-    ][index % 7];
+    return COPY.QUOTES[index % COPY.QUOTES.length];
   }
 
   function cleanName(name) {
-    return String(name || 'UNTITLED').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+    return String(name || COPY.UNTITLED).replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
   }
 
   function splitLocation(location) {
