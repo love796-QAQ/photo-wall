@@ -11,7 +11,7 @@ import threading
 import time
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,18 +27,28 @@ DB_FILE = DATA_DIR / "photo_wall.db"
 UPLOADS_DIR = DATA_DIR / "uploads"
 LEGACY_PHOTOS_DIR = DATA_DIR / "photos"
 LEGACY_DATA_FILE = DATA_DIR / "photos.json"
-STATIC_CACHE_EXTS = {".css", ".js", ".png", ".ico", ".svg", ".woff2"}
+REVALIDATE_STATIC_EXTS = {".css", ".js"}
+LONG_CACHE_STATIC_EXTS = {".png", ".ico", ".svg", ".woff2"}
 
 
-def is_cacheable_static(path):
+def static_cache_control(path):
     clean = path.split("?")[0]
     _, ext = os.path.splitext(clean)
-    return ext.lower() in STATIC_CACHE_EXTS
+    ext = ext.lower()
+    if ext in REVALIDATE_STATIC_EXTS:
+        return "no-cache"
+    if ext in LONG_CACHE_STATIC_EXTS:
+        return "public, max-age=86400"
+    return None
+
+
 IMAGE_EXTS = extract_exif.IMAGE_EXTS
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ZIP_FILES = 2000
 DATA_LOCK = threading.Lock()
 DEFAULT_ADMIN_PATH = "/admin"
+APP_VERSION = os.environ.get("PHOTO_WALL_VERSION", "1.0")
+UNCHANGED = object()
 extract_exif.configure_paths(DATA_DIR)
 
 
@@ -316,7 +326,7 @@ def upsert_group(connection, group, sort_order):
     )
 
 
-def save_group_photos(connection, group):
+def replace_group_photos(connection, group):
     connection.execute("DELETE FROM photos WHERE group_id = ?", (group["id"],))
     for photo_index, photo in enumerate(group.get("photos", [])):
         connection.execute(
@@ -333,34 +343,44 @@ def save_group_photos(connection, group):
         )
 
 
-def save_store_incremental(store):
-    """Persist only changed groups — far cheaper than full rebuild."""
-    admin_path = get_setting("admin_path")
+def write_active_group_id(connection, group_id):
+    if group_id is None:
+        connection.execute("DELETE FROM settings WHERE key = 'active_group_id'")
+        return
+    connection.execute(
+        """
+        INSERT INTO settings (key, value)
+        VALUES ('active_group_id', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (group_id,),
+    )
+
+
+def save_group(
+    group,
+    sort_order,
+    replace_photos=False,
+    active_group_id=UNCHANGED,
+):
     with connect_db() as connection:
-        connection.execute("DELETE FROM settings")
-        active_group_id = store.get("active_group_id")
-        if active_group_id is not None:
-            connection.execute(
-                "INSERT INTO settings (key, value) VALUES (?, ?)",
-                ("active_group_id", active_group_id),
-            )
-        if admin_path:
-            connection.execute(
-                "INSERT INTO settings (key, value) VALUES (?, ?)",
-                ("admin_path", admin_path),
-            )
+        upsert_group(connection, group, sort_order)
+        if replace_photos:
+            replace_group_photos(connection, group)
+        if active_group_id is not UNCHANGED:
+            write_active_group_id(connection, active_group_id)
 
-        for group_index, group in enumerate(store.get("groups", [])):
-            upsert_group(connection, group, group_index)
-            save_group_photos(connection, group)
 
-        current_ids = {group["id"] for group in store.get("groups", [])}
-        existing_ids = {
-            row["id"]
-            for row in connection.execute("SELECT id FROM groups").fetchall()
-        }
-        for stale_id in existing_ids - current_ids:
-            connection.execute("DELETE FROM groups WHERE id = ?", (stale_id,))
+def delete_group_record(group_id, active_group_id=UNCHANGED):
+    with connect_db() as connection:
+        connection.execute("DELETE FROM groups WHERE id = ?", (group_id,))
+        if active_group_id is not UNCHANGED:
+            write_active_group_id(connection, active_group_id)
+
+
+def set_active_group_id(group_id):
+    with connect_db() as connection:
+        write_active_group_id(connection, group_id)
 
 
 def ensure_store_schema(store):
@@ -400,9 +420,7 @@ def ensure_store_schema(store):
                 group["show_cover_in_details"] = unified_visibility
                 group["show_story_cover_in_details"] = unified_visibility
                 changed = True
-    if changed:
-        save_store_incremental(store)
-    return store
+    return store, changed
 
 
 def initialize_store():
@@ -412,6 +430,10 @@ def initialize_store():
     if not get_setting("admin_path"):
         set_setting("admin_path", default_admin_path())
     if has_db_groups():
+        with DATA_LOCK:
+            store, changed = ensure_store_schema(load_store())
+            if changed:
+                save_store(store)
         return
     if GROUPS_FILE.exists():
         store = read_json(GROUPS_FILE, {"active_group_id": None, "groups": []})
@@ -430,7 +452,8 @@ def initialize_store():
             "show_story_cover_in_details": False,
         }
         store = {"active_group_id": group_id, "groups": [group]}
-    save_store(ensure_store_schema(store))
+    store, _ = ensure_store_schema(store)
+    save_store(store)
 
 
 def find_group(store, group_id):
@@ -467,7 +490,7 @@ def resolve_public_file(relative_path):
 
 
 def public_store(store):
-    store = ensure_store_schema(store)
+    store, _ = ensure_store_schema(store)
     return {
         "active_group_id": store.get("active_group_id"),
         "groups": [
@@ -587,17 +610,15 @@ def safe_extract_zip(zip_path, output_dir):
 
 
 class PhotoWallHandler(SimpleHTTPRequestHandler):
-    server_version = "PhotoWall/1.0"
+    server_version = f"PhotoWall/{APP_VERSION}"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def end_headers(self):
         if not hasattr(self, "_cache_header_set"):
-            if is_cacheable_static(self.path):
-                self.send_header("Cache-Control", "public, max-age=86400")
-            else:
-                self.send_header("Cache-Control", "no-store")
+            cache_control = static_cache_control(self.path)
+            self.send_header("Cache-Control", cache_control or "no-store")
         super().end_headers()
 
     def log_request(self, code="-", size="-"):
@@ -611,7 +632,8 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def send_error_json(self, message, status=HTTPStatus.BAD_REQUEST):
         self.send_json({"ok": False, "error": message}, status)
@@ -624,7 +646,6 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         try:
             stat = target.stat()
-            file_size = stat.st_size
         except OSError:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -675,7 +696,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
             self.serve_data_file(path)
             return
         if path == "/api/health":
-            self.send_json({"ok": True, "version": "1.0", "time": now_iso()})
+            self.send_json({"ok": True, "version": APP_VERSION, "time": now_iso()})
             return
         if path == "/api/settings":
             self.send_json({"ok": True, "admin_path": admin_path})
@@ -684,7 +705,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
             self.send_json({"ok": True, **public_store(load_store())})
             return
         if path == "/api/active-photos":
-            store = ensure_store_schema(load_store())
+            store, _ = ensure_store_schema(load_store())
             requested_group_id = parse_qs(parsed_url.query).get("group_id", [None])[0]
             group = find_group(
                 store,
@@ -735,7 +756,8 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
             return
         if path.startswith("/api/groups/"):
             group_id = path.rsplit("/", 1)[-1]
-            group = find_group(ensure_store_schema(load_store()), group_id)
+            store, _ = ensure_store_schema(load_store())
+            group = find_group(store, group_id)
             if not group:
                 self.send_error_json("分组不存在", HTTPStatus.NOT_FOUND)
             else:
@@ -765,7 +787,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
             self.serve_data_file(path)
             return
         if path == "/api/health":
-            self.send_json({"ok": True, "version": "1.0", "time": now_iso()})
+            self.send_json({"ok": True, "version": APP_VERSION, "time": now_iso()})
             return
         super().do_HEAD()
 
@@ -842,9 +864,15 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         with DATA_LOCK:
             store = load_store()
             store["groups"].append(group)
+            active_group_id = UNCHANGED
             if not store.get("active_group_id"):
                 store["active_group_id"] = group["id"]
-            save_store_incremental(store)
+                active_group_id = group["id"]
+            save_group(
+                group,
+                len(store["groups"]) - 1,
+                active_group_id=active_group_id,
+            )
         self.send_json({"ok": True, "group": group}, HTTPStatus.CREATED)
 
     def select_group(self):
@@ -855,7 +883,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
             if not find_group(store, group_id):
                 raise ValueError("分组不存在")
             store["active_group_id"] = group_id
-            save_store_incremental(store)
+            set_active_group_id(group_id)
         self.send_json({"ok": True, "active_group_id": group_id})
 
     def rename_group(self):
@@ -865,20 +893,20 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         if not name:
             raise ValueError("请输入分组名称")
         with DATA_LOCK:
-            store = ensure_store_schema(load_store())
+            store, _ = ensure_store_schema(load_store())
             group = find_group(store, group_id)
             if not group:
                 raise ValueError("分组不存在")
             group["name"] = name[:80]
             group["updated_at"] = now_iso()
-            save_store_incremental(store)
+            save_group(group, store["groups"].index(group))
         self.send_json({"ok": True, "group": group})
 
     def delete_group(self):
         payload = self.read_json_body()
         group_id = payload.get("group_id")
         with DATA_LOCK:
-            store = ensure_store_schema(load_store())
+            store, _ = ensure_store_schema(load_store())
             group = find_group(store, group_id)
             if not group:
                 raise ValueError("分组不存在")
@@ -889,7 +917,10 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
                 store["active_group_id"] = (
                     store["groups"][0]["id"] if store["groups"] else None
                 )
-            save_store_incremental(store)
+                active_group_id = store["active_group_id"]
+            else:
+                active_group_id = UNCHANGED
+            delete_group_record(group_id, active_group_id)
         for photo in group.get("photos", []):
             remove_managed_file(store, photo)
         shutil.rmtree(UPLOADS_DIR / group_id, ignore_errors=True)
@@ -903,7 +934,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         group_id = payload.get("group_id")
         photo_id = payload.get("photo_id")
         with DATA_LOCK:
-            store = ensure_store_schema(load_store())
+            store, _ = ensure_store_schema(load_store())
             group = find_group(store, group_id)
             if not group:
                 raise ValueError("分组不存在")
@@ -926,7 +957,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
                     else (remaining[0]["id"] if remaining else None)
                 )
             group["updated_at"] = now_iso()
-            save_store_incremental(store)
+            save_group(group, store["groups"].index(group), replace_photos=True)
         remove_managed_file(store, photo)
         self.send_json({
             "ok": True,
@@ -939,7 +970,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         group_id = payload.get("group_id")
         photo_id = payload.get("photo_id")
         with DATA_LOCK:
-            store = ensure_store_schema(load_store())
+            store, _ = ensure_store_schema(load_store())
             group = find_group(store, group_id)
             if not group:
                 raise ValueError("分组不存在")
@@ -947,7 +978,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
                 raise ValueError("照片不存在")
             group["cover_photo_id"] = photo_id
             group["updated_at"] = now_iso()
-            save_store_incremental(store)
+            save_group(group, store["groups"].index(group))
         self.send_json({"ok": True, "cover_photo_id": photo_id})
 
     def set_group_story_cover(self):
@@ -955,7 +986,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         group_id = payload.get("group_id")
         photo_id = payload.get("photo_id")
         with DATA_LOCK:
-            store = ensure_store_schema(load_store())
+            store, _ = ensure_store_schema(load_store())
             group = find_group(store, group_id)
             if not group:
                 raise ValueError("分组不存在")
@@ -963,14 +994,14 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
                 raise ValueError("照片不存在")
             group["story_cover_photo_id"] = photo_id
             group["updated_at"] = now_iso()
-            save_store_incremental(store)
+            save_group(group, store["groups"].index(group))
         self.send_json({"ok": True, "story_cover_photo_id": photo_id})
 
     def set_group_detail_settings(self):
         payload = self.read_json_body()
         group_id = payload.get("group_id")
         with DATA_LOCK:
-            store = ensure_store_schema(load_store())
+            store, _ = ensure_store_schema(load_store())
             group = find_group(store, group_id)
             if not group:
                 raise ValueError("分组不存在")
@@ -979,7 +1010,7 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
                 payload.get("show_story_cover_in_details")
             )
             group["updated_at"] = now_iso()
-            save_store_incremental(store)
+            save_group(group, store["groups"].index(group))
         self.send_json({
             "ok": True,
             "show_cover_in_details": group["show_cover_in_details"],
@@ -1036,9 +1067,16 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
                     uploaded[1]["id"] if len(uploaded) > 1 else uploaded[0]["id"]
                 )
             group["updated_at"] = now_iso()
+            active_group_id = UNCHANGED
             if not store.get("active_group_id"):
                 store["active_group_id"] = group["id"]
-            save_store_incremental(store)
+                active_group_id = group["id"]
+            save_group(
+                group,
+                store["groups"].index(group),
+                replace_photos=True,
+                active_group_id=active_group_id,
+            )
         self.send_json({"ok": True, "group_id": group["id"], "uploaded": len(uploaded)})
 
     def upload_zip(self):
@@ -1093,9 +1131,16 @@ class PhotoWallHandler(SimpleHTTPRequestHandler):
         with DATA_LOCK:
             store = load_store()
             store["groups"].append(group)
+            active_group_id = UNCHANGED
             if not store.get("active_group_id"):
                 store["active_group_id"] = group_id
-            save_store_incremental(store)
+                active_group_id = group_id
+            save_group(
+                group,
+                len(store["groups"]) - 1,
+                replace_photos=True,
+                active_group_id=active_group_id,
+            )
         self.send_json({"ok": True, "group_id": group_id, "uploaded": len(photos)})
 
 
