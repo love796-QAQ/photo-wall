@@ -22,6 +22,7 @@ button { cursor: pointer; }
 .header-title p { margin: 0 0 .4rem; color: var(--pink); font: 700 .58rem/1 var(--mono); letter-spacing: .25em; }
 .header-title h1 { margin: 0; font: 900 clamp(2.5rem, 5vw, 4.5rem)/.85 var(--display); letter-spacing: -.04em; }
 .header-actions { display: flex; align-items: center; gap: 1rem; }
+.header-version { color: var(--muted); font: 600 .5rem/1 var(--mono); letter-spacing: .1em; opacity: .55; }
 .header-actions button { padding: .55rem .7rem; color: var(--muted); background: transparent; border: 1px solid var(--line); font: 700 .62rem/1 var(--mono); letter-spacing: .12em; }
 .header-actions button:hover { color: var(--text); border-color: rgba(255,255,255,.3); }
 .view-link { color: var(--text); font: 700 .68rem/1 var(--mono); letter-spacing: .12em; text-decoration: none; }

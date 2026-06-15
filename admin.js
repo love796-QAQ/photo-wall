@@ -35,6 +35,16 @@
     state.adminPath = payload.admin_path || '/admin';
   }
 
+  async function loadVersion() {
+    try {
+      var payload = await api('/api/health');
+      var el = document.getElementById('header-version');
+      if (el && payload.version) el.textContent = 'v' + payload.version;
+    } catch (e) {
+      // health endpoint is non-critical
+    }
+  }
+
   function renderGroups() {
     $('#groups-list').innerHTML = state.groups.map(function (group) {
       return '<button class="group-card' +
@@ -377,5 +387,5 @@
   }));
 
   document.querySelectorAll('.modal').forEach(bindModal);
-  Promise.all([loadSettings(), loadGroups(true)]).catch(function (error) { toast(error.message, true); });
+  Promise.all([loadSettings(), loadGroups(true), loadVersion()]).catch(function (error) { toast(error.message, true); });
 })();
